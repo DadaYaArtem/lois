@@ -1,3 +1,7 @@
+# Лабораторная работа №1 по дисциплине ЛОИС
+# Автор: Морозов Артем
+# Вариант 9: построение СДНФ формулы логики высказываний
+
 # ============================================================
 # Генератор случайных формул для режима тестирования
 # ============================================================
@@ -7,7 +11,6 @@ import random
 
 def _random_tree(variables: list, depth: int = 0, max_depth: int = 3):
     """Рекурсивно строит случайное дерево формулы."""
-    # На максимальной глубине или с вероятностью — возвращаем переменную
     if depth >= max_depth or (depth > 0 and random.random() < 0.3):
         var = random.choice(variables)
         # Иногда добавляем отрицание
@@ -15,7 +18,6 @@ def _random_tree(variables: list, depth: int = 0, max_depth: int = 3):
             return ("not", ("var", var))
         return ("var", var)
 
-    # Выбираем случайную бинарную операцию
     op = random.choice(["and", "or", "impl", "equiv"])
     left = _random_tree(variables, depth + 1, max_depth)
     right = _random_tree(variables, depth + 1, max_depth)
@@ -48,12 +50,6 @@ def tree_to_string(tree) -> str:
 
 
 def generate_formula(num_vars: int = 2, max_depth: int = 2) -> str:
-    """
-    Генерирует случайную формулу.
-
-    num_vars  — количество переменных (2 или 3)
-    max_depth — максимальная глубина дерева
-    """
     all_vars = list("PQRS")
     variables = all_vars[:num_vars]
     tree = _random_tree(variables, depth=0, max_depth=max_depth)
@@ -61,14 +57,6 @@ def generate_formula(num_vars: int = 2, max_depth: int = 2) -> str:
 
 
 def generate_formula_for_test(difficulty: int = 1) -> str:
-    """
-    Генерирует формулу заданной сложности для тестирования.
-
-    difficulty:
-        1 — лёгкая (2 переменные, глубина 1-2)
-        2 — средняя (2-3 переменные, глубина 2)
-        3 — сложная (3 переменные, глубина 2-3)
-    """
     if difficulty == 1:
         return generate_formula(num_vars=2, max_depth=2)
     elif difficulty == 2:
