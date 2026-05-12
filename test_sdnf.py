@@ -1,71 +1,72 @@
 import pytest
-from sdnf import build_sdnf, build_sdnf_detailed
-from generator import generate_formula_for_test
-from test_mode import _normalize_sdnf, _check_answer
+
+from evaluator import evaluate, get_variables
 from lexer import tokenize
 from parser import parse
-from evaluator import get_variables, evaluate
+from sdnf import build_sdnf, build_sdnf_detailed
 
-
-# ==================== Тесты лексера ====================
 
 class TestLexer:
-    def test_simple_vars(self):
-        tokens = tokenize("P")
-        assert tokens == [("VAR", "P")]
+    def test_simple_var(self):
+        assert tokenize("P") == [("VAR", "P")]
 
-    def test_conjunction(self):
-        tokens = tokenize("(P/\\Q)")
-        assert len(tokens) == 5
-        assert tokens[2] == ("AND", "/\\")
+    def test_constants(self):
+        assert tokenize("(P/\\1)")[-2] == ("CONST", "1")
+        assert tokenize("0") == [("CONST", "0")]
 
     def test_all_operators(self):
-        tokens = tokenize("(P/\\Q)\\/(!R)->(S~T)")
-        types = [t[0] for t in tokens]
+        tokens = tokenize("((P/\\Q)->((!R)~(S\\/T)))")
+        types = [token_type for token_type, _ in tokens]
         assert "AND" in types
         assert "OR" in types
         assert "NOT" in types
         assert "IMPL" in types
         assert "EQUIV" in types
 
-    def test_invalid_char(self):
+    def test_spaces_are_invalid(self):
         with pytest.raises(ValueError):
-            tokenize("P & Q")
+            tokenize("(P /\\ Q)")
 
+    def test_only_ascii_uppercase_variables(self):
+        with pytest.raises(ValueError):
+            tokenize("a")
+        with pytest.raises(ValueError):
+            tokenize("А")
 
-# ==================== Тесты парсера ====================
 
 class TestParser:
     def test_variable(self):
-        tree = parse("P")
-        assert tree == ("var", "P")
+        assert parse("P") == ("var", "P")
 
-    def test_negation(self):
-        tree = parse("!P")
-        assert tree == ("not", ("var", "P"))
+    def test_constant(self):
+        assert parse("1") == ("const", 1)
 
-    def test_conjunction(self):
-        tree = parse("(P/\\Q)")
-        assert tree == ("and", ("var", "P"), ("var", "Q"))
+    def test_negation_requires_parentheses(self):
+        assert parse("(!P)") == ("not", ("var", "P"))
+        with pytest.raises(ValueError):
+            parse("!P")
 
-    def test_priority(self):
-        # /\\ сильнее \\/, поэтому P\\/Q/\\R = P\\/(Q/\\R)
-        tree = parse("P\\/Q/\\R")
-        assert tree[0] == "or"
-        assert tree[2][0] == "and"
+    def test_binary_operation_requires_parentheses(self):
+        assert parse("(P/\\Q)") == ("and", ("var", "P"), ("var", "Q"))
+        with pytest.raises(ValueError):
+            parse("P/\\Q")
 
-    def test_implication_right_assoc(self):
-        # P->Q->R = P->(Q->R)
-        tree = parse("P->Q->R")
+    def test_extra_parentheses_are_invalid(self):
+        with pytest.raises(ValueError):
+            parse("(P)")
+        with pytest.raises(ValueError):
+            parse("((P))")
+
+    def test_each_binary_operation_requires_own_parentheses(self):
+        with pytest.raises(ValueError):
+            parse("(P\\/Q\\/R)")
+        assert parse("((P\\/Q)\\/R)")[0] == "or"
+
+    def test_implication_nested_explicitly(self):
+        tree = parse("(P->(Q->R))")
         assert tree[0] == "impl"
         assert tree[2][0] == "impl"
 
-    def test_unbalanced_parens(self):
-        with pytest.raises(ValueError):
-            parse("(P/\\Q")
-
-
-# ==================== Тесты вычислителя ====================
 
 class TestEvaluator:
     def test_variable(self):
@@ -73,8 +74,12 @@ class TestEvaluator:
         assert evaluate(tree, {"P": 1}) == 1
         assert evaluate(tree, {"P": 0}) == 0
 
+    def test_constant(self):
+        assert evaluate(parse("1"), {}) == 1
+        assert evaluate(parse("0"), {}) == 0
+
     def test_negation(self):
-        tree = parse("!P")
+        tree = parse("(!P)")
         assert evaluate(tree, {"P": 1}) == 0
         assert evaluate(tree, {"P": 0}) == 1
 
@@ -90,59 +95,54 @@ class TestEvaluator:
         assert evaluate(tree, {"P": 0, "Q": 0}) == 1
         assert evaluate(tree, {"P": 1, "Q": 0}) == 0
 
-    def test_get_variables(self):
-        tree = parse("(P->(Q/\\R))")
-        vars = get_variables(tree)
-        assert vars == ["P", "Q", "R"]
+    def test_get_variables_ignores_constants(self):
+        assert get_variables(parse("(P->(1/\\R))")) == ["P", "R"]
 
-
-# ==================== Тесты СДНФ ====================
 
 class TestSDNF:
     def test_implication(self):
-        result = build_sdnf("(P->Q)")
-        assert result == "((!P/\\!Q)\\/(!P/\\Q)\\/(P/\\Q))"
+        assert build_sdnf("(P->Q)") == "((!P/\\!Q)\\/(!P/\\Q)\\/(P/\\Q))"
 
     def test_conjunction(self):
-        result = build_sdnf("(P/\\Q)")
-        assert result == "(P/\\Q)"
+        assert build_sdnf("(P/\\Q)") == "(P/\\Q)"
 
     def test_disjunction(self):
-        result = build_sdnf("(P\\/Q)")
-        assert result == "((!P/\\Q)\\/(P/\\!Q)\\/(P/\\Q))"
+        assert build_sdnf("(P\\/Q)") == "((!P/\\Q)\\/(P/\\!Q)\\/(P/\\Q))"
 
     def test_equivalence(self):
-        result = build_sdnf("(P~Q)")
-        assert result == "((!P/\\!Q)\\/(P/\\Q))"
+        assert build_sdnf("(P~Q)") == "((!P/\\!Q)\\/(P/\\Q))"
 
     def test_negation(self):
-        result = build_sdnf("(!P)")
-        assert result == "(!P)"
+        assert build_sdnf("(!P)") == "(!P)"
 
     def test_triple_conjunction(self):
-        result = build_sdnf("((P/\\Q)/\\R)")
-        assert result == "(P/\\Q/\\R)"
+        assert build_sdnf("((P/\\Q)/\\R)") == "(P/\\Q/\\R)"
 
     def test_implication_with_conjunction(self):
-        result = build_sdnf("(P->(Q/\\R))")
         expected = "((!P/\\!Q/\\!R)\\/(!P/\\!Q/\\R)\\/(!P/\\Q/\\!R)\\/(!P/\\Q/\\R)\\/(P/\\Q/\\R))"
-        assert result == expected
+        assert build_sdnf("(P->(Q/\\R))") == expected
 
     def test_tautology(self):
-        result = build_sdnf("(P\\/(!P))")
-        assert result == "((!P)\\/(P))"
+        assert build_sdnf("(P\\/(!P))") == "((!P)\\/(P))"
 
     def test_contradiction(self):
-        result = build_sdnf("(P/\\(!P))")
-        assert result == ""
+        assert build_sdnf("(P/\\(!P))") == ""
 
     def test_single_variable(self):
-        result = build_sdnf("P")
-        assert result == "(P)"
+        assert build_sdnf("P") == "(P)"
 
     def test_double_negation(self):
-        result = build_sdnf("(!(!P))")
-        assert result == "(P)"
+        assert build_sdnf("(!(!P))") == "(P)"
+
+    def test_constants_as_formulas(self):
+        assert build_sdnf("1") == "1"
+        assert build_sdnf("0") == ""
+        assert build_sdnf("(!0)") == "1"
+
+    def test_constants_in_operations(self):
+        assert build_sdnf("(P/\\1)") == "(P)"
+        assert build_sdnf("(P\\/0)") == "(P)"
+        assert build_sdnf("(P\\/1)") == "((!P)\\/(P))"
 
     def test_detailed_has_all_fields(self):
         result = build_sdnf_detailed("(P->Q)")
@@ -152,7 +152,3 @@ class TestSDNF:
         assert "constituents" in result
         assert "sdnf" in result
         assert len(result["truth_table"]) == 4
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

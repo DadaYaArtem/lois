@@ -11,6 +11,7 @@ TOK_IMPL = "IMPL"
 TOK_EQUIV = "EQUIV"
 TOK_LPAREN = "LPAREN"
 TOK_RPAREN = "RPAREN"
+TOK_CONST = "CONST"
 
 
 def tokenize(formula: str) -> list:
@@ -25,10 +26,7 @@ def tokenize(formula: str) -> list:
     while i < len(formula):
         ch = formula[i]
 
-        if ch == ' ':
-            i += 1
-            continue
-        elif ch == '(':
+        if ch == '(':
             tokens.append((TOK_LPAREN, '('))
             i += 1
         elif ch == ')':
@@ -49,7 +47,10 @@ def tokenize(formula: str) -> list:
         elif ch == '\\' and i + 1 < len(formula) and formula[i + 1] == '/':
             tokens.append((TOK_OR, '\\/'))
             i += 2
-        elif ch.isalpha() and ch.isupper():
+        elif ch in "01":
+            tokens.append((TOK_CONST, ch))
+            i += 1
+        elif ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
             tokens.append((TOK_VAR, ch))
             i += 1
         else:

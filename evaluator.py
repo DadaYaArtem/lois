@@ -11,6 +11,8 @@ def get_variables(tree) -> list:
     def walk(node):
         if node[0] == "var":
             variables.add(node[1])
+        elif node[0] == "const":
+            return
         elif node[0] == "not":
             walk(node[1])
         else:  # бинарные: and, or, impl, equiv
@@ -32,6 +34,8 @@ def evaluate(tree, values: dict) -> int:
 
     if op == "var":
         return values[tree[1]]
+    elif op == "const":
+        return tree[1]
     elif op == "not":
         return 1 - evaluate(tree[1], values)
     elif op == "and":

@@ -20,6 +20,8 @@ def build_sdnf(formula: str) -> str:
     tree = parse(formula)
     variables = get_variables(tree)
     table = truth_table(tree, variables)
+    if not variables:
+        return "1" if table[0][1] == 1 else ""
 
     # Собираем конституенты единицы
     constituents = []
@@ -67,6 +69,15 @@ def build_sdnf_detailed(formula: str) -> dict:
     tree = parse(formula)
     variables = get_variables(tree)
     table = truth_table(tree, variables)
+    if not variables:
+        sdnf_str = "1" if table[0][1] == 1 else ""
+        return {
+            "formula": formula,
+            "variables": variables,
+            "truth_table": table,
+            "constituents": [[]] if table[0][1] == 1 else [],
+            "sdnf": sdnf_str,
+        }
 
     constituents = []
     for values, result in table:

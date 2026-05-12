@@ -1,43 +1,42 @@
-# ============================================================
-# Режим решения: пользователь вводит формулу,
-# программа показывает пошаговое построение СДНФ
-# ============================================================
-
 from sdnf import build_sdnf_detailed
 
 
 def _print_truth_table(variables, table):
-    """Печатает таблицу истинности."""
-    header = " | ".join(variables) + " | F"
+    header = " | ".join(variables) + " | F" if variables else "F"
     print(header)
     print("-" * len(header))
     for values, result in table:
         row = " | ".join(str(values[v]) for v in variables)
-        print(f"{row} | {result}")
+        print(f"{row} | {result}" if variables else str(result))
 
 
 def _print_constituents(constituents):
-    """Печатает найденные конституенты единицы."""
-    for i, c in enumerate(constituents, 1):
-        print(f"  {i}) ({'/\\'.join(c)})")
+    for i, constituent in enumerate(constituents, 1):
+        if constituent:
+            text = "/\\".join(constituent)
+            print(f"  {i}) ({text})")
+        else:
+            print(f"  {i}) 1")
 
 
 def solve_one(formula: str):
-    """Решает одну формулу с выводом всех шагов."""
     try:
         result = build_sdnf_detailed(formula)
     except ValueError as e:
         print(f"\n  Ошибка: {e}\n")
         return
 
-    print(f"\n  Формула: {result['formula']}")
-    print(f"  Переменные: {', '.join(result['variables'])}")
+    variables = result["variables"]
+    variables_text = ", ".join(variables) if variables else "-"
 
-    print(f"\n  Таблица истинности:")
-    _print_truth_table(result["variables"], result["truth_table"])
+    print(f"\n  Формула: {result['formula']}")
+    print(f"  Переменные: {variables_text}")
+
+    print("\n  Таблица истинности:")
+    _print_truth_table(variables, result["truth_table"])
 
     if not result["constituents"]:
-        print("\n  Формула является противоречием — СДНФ не существует.")
+        print("\n  Формула является противоречием: СДНФ не существует.")
     else:
         print(f"\n  Конституенты единицы ({len(result['constituents'])} шт.):")
         _print_constituents(result["constituents"])
@@ -46,22 +45,30 @@ def solve_one(formula: str):
     print()
 
 
+def _has_whitespace(value: str) -> bool:
+    return any(ch.isspace() for ch in value)
+
+
 def solve_mode():
-    """Запускает интерактивный режим решения."""
     print("\n=== Режим построения СДНФ ===")
-    print("Операторы: /\\ (и), \\/ (или), ! (не), -> (импл.), ~ (экв.)")
-    print("Переменные: A-Z")
-    print("Введите 'назад' для возврата в меню.\n")
+    print("Операторы: /\\ (и), \\/ (или), ! (не), -> (импликация), ~ (эквиваленция)")
+    print("Переменные: A-Z; константы: 0, 1")
+    print("Строгий ввод: A, 1, (!A), (A/\\B), (A->1), ((A\\/B)/\\(!C))")
+    print("Пробелы в формулах не допускаются. Введите 'назад' для возврата в меню.\n")
 
     while True:
         try:
-            inp = input("Формула >>> ").strip()
+            raw_inp = input("Формула >>> ")
         except EOFError:
             break
 
+        inp = raw_inp.strip()
         if inp.lower() in ("назад", "back", "quit", "exit"):
             break
         if not inp:
+            continue
+        if raw_inp != inp or _has_whitespace(inp):
+            print("Некорректный ввод: пробелы в формуле не допускаются.")
             continue
 
         solve_one(inp)
