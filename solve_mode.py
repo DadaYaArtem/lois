@@ -2,7 +2,7 @@
 # Автор: Морозов Артем
 # Вариант 9: построение СДНФ формулы логики высказываний
 
-from sdnf import build_sdnf_detailed
+from sdnf import build_sdnf_detailed, _format_constituent
 
 
 def _print_truth_table(variables, table):
@@ -17,8 +17,7 @@ def _print_truth_table(variables, table):
 def _print_constituents(constituents):
     for i, constituent in enumerate(constituents, 1):
         if constituent:
-            text = "/\\".join(constituent)
-            print(f"  {i}) ({text})")
+            print(f"  {i}) {_format_constituent(constituent)}")
         else:
             print(f"  {i}) 1")
 
